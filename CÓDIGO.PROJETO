@@ -1,0 +1,187 @@
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.*;
+
+public class BatalhaNaval extends JFrame {
+    private static final int GRID_SIZE = 10;
+    private static final int[] TAMANHOS_NAVIOS = {5, 4, 3, 3, 2}; // Exemplo: Porta-aviões, Cruzador etc.
+
+    private JPanel painelJogador, painelComputador;
+    private Celula[][] gradeJogador, gradeComputador;
+    private Random random = new Random();
+
+    public BatalhaNaval() {
+        setTitle("Batalha Naval Profissional");
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLayout(new GridLayout(1, 2));
+
+        gradeJogador = criarGrade();
+        gradeComputador = criarGrade();
+
+        posicionarNavios(gradeJogador);
+        posicionarNavios(gradeComputador); // Invisível para o jogador
+
+        painelJogador = criarTabuleiro(gradeJogador, false);
+        painelComputador = criarTabuleiro(gradeComputador, true);
+
+        add(painelJogador);
+        add(painelComputador);
+        pack();
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    // Enums para o estado das células
+    enum Estado {
+        AGUA, NAVIO, ACERTO, ERRO
+    }
+
+    // Classe que representa uma célula
+    class Celula {
+        Estado estado = Estado.AGUA;
+        boolean revelada = false;
+    }
+
+    private Celula[][] criarGrade() {
+        Celula[][] grade = new Celula[GRID_SIZE][GRID_SIZE];
+        for (int i = 0; i < GRID_SIZE; i++)
+            for (int j = 0; j < GRID_SIZE; j++)
+                grade[i][j] = new Celula();
+        return grade;
+    }
+
+    private void posicionarNavios(Celula[][] grade) {
+        for (int tamanho : TAMANHOS_NAVIOS) {
+            boolean colocado = false;
+            while (!colocado) {
+                int linha = random.nextInt(GRID_SIZE);
+                int coluna = random.nextInt(GRID_SIZE);
+                boolean horizontal = random.nextBoolean();
+                if (podeColocarNavio(grade, linha, coluna, tamanho, horizontal)) {
+                    for (int i = 0; i < tamanho; i++) {
+                        if (horizontal)
+                            grade[linha][coluna + i].estado = Estado.NAVIO;
+                        else
+                            grade[linha + i][coluna].estado = Estado.NAVIO;
+                    }
+                    colocado = true;
+                }
+            }
+        }
+    }
+
+    private boolean podeColocarNavio(Celula[][] grade, int linha, int coluna, int tamanho, boolean horizontal) {
+        if (horizontal && coluna + tamanho > GRID_SIZE) return false;
+        if (!horizontal && linha + tamanho > GRID_SIZE) return false;
+        for (int i = 0; i < tamanho; i++) {
+            int r = linha + (horizontal ? 0 : i);
+            int c = coluna + (horizontal ? i : 0);
+            if (grade[r][c].estado != Estado.AGUA) return false;
+        }
+        return true;
+    }
+
+    private JPanel criarTabuleiro(Celula[][] grade, boolean interativo) {
+        JPanel painel = new JPanel(new GridLayout(GRID_SIZE, GRID_SIZE));
+        painel.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+        for (int i = 0; i < GRID_SIZE; i++) {
+            for (int j = 0; j < GRID_SIZE; j++) {
+                JPanel celulaPanel = new JPanel();
+                celulaPanel.setPreferredSize(new Dimension(30, 30));
+                celulaPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+                atualizarCor(celulaPanel, grade[i][j], false);
+                final int linha = i, coluna = j;
+
+                if (interativo) {
+                    celulaPanel.addMouseListener(new MouseAdapter() {
+                        public void mouseClicked(MouseEvent e) {
+                            Celula celula = grade[linha][coluna];
+                            if (celula.revelada) return;
+
+                            celula.revelada = true;
+                            if (celula.estado == Estado.NAVIO) {
+                                celula.estado = Estado.ACERTO;
+                                atualizarCor(celulaPanel, celula, true);
+                                JOptionPane.showMessageDialog(null, "Você acertou um navio!");
+                            } else {
+                                celula.estado = Estado.ERRO;
+                                atualizarCor(celulaPanel, celula, true);
+                            }
+
+                            if (todosNaviosAfundados(grade)) {
+                                JOptionPane.showMessageDialog(null, "Parabéns! Você venceu!");
+                                System.exit(0);
+                            }
+
+                            jogadaComputador();
+                        }
+                    });
+                }
+
+                painel.add(celulaPanel);
+            }
+        }
+        return painel;
+    }
+
+    private void jogadaComputador() {
+        int linha, coluna;
+        do {
+            linha = random.nextInt(GRID_SIZE);
+            coluna = random.nextInt(GRID_SIZE);
+        } while (gradeJogador[linha][coluna].revelada);
+
+        Celula celula = gradeJogador[linha][coluna];
+        celula.revelada = true;
+        if (celula.estado == Estado.NAVIO) {
+            celula.estado = Estado.ACERTO;
+            JOptionPane.showMessageDialog(null, "Computador acertou seu navio em (" + linha + ", " + coluna + ")!");
+        } else {
+            celula.estado = Estado.ERRO;
+        }
+
+        atualizarTabuleiro(painelJogador, gradeJogador);
+
+        if (todosNaviosAfundados(gradeJogador)) {
+            JOptionPane.showMessageDialog(null, "O computador venceu!");
+            System.exit(0);
+        }
+    }
+
+    private void atualizarTabuleiro(JPanel painel, Celula[][] grade) {
+        painel.removeAll();
+        for (int i = 0; i < GRID_SIZE; i++)
+            for (int j = 0; j < GRID_SIZE; j++) {
+                JPanel celulaPanel = new JPanel();
+                celulaPanel.setPreferredSize(new Dimension(30, 30));
+                celulaPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+                atualizarCor(celulaPanel, grade[i][j], true);
+                painel.add(celulaPanel);
+            }
+        painel.revalidate();
+        painel.repaint();
+    }
+
+    private void atualizarCor(JPanel celula, Celula estado, boolean mostrarNavio) {
+        switch (estado.estado) {
+            case AGUA -> celula.setBackground(estado.revelada ? Color.WHITE : Color.BLUE);
+            case NAVIO -> celula.setBackground(mostrarNavio ? Color.DARK_GRAY : Color.BLUE);
+            case ACERTO -> celula.setBackground(Color.RED);
+            case ERRO -> celula.setBackground(Color.LIGHT_GRAY);
+        }
+    }
+
+    private boolean todosNaviosAfundados(Celula[][] grade) {
+        for (Celula[] linha : grade)
+            for (Celula c : linha)
+                if (c.estado == Estado.NAVIO) return false;
+        return true;
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(BatalhaNaval::new);
+    }
+}
